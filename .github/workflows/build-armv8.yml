@@ -1,0 +1,112 @@
+name: Build Audiobookshelf ARMv8
+
+"on":
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Audiobookshelf version, such as 2.36.0; use latest for newest release'
+        required: true
+        default: latest
+      publish_release:
+        description: 'Create/update a GitHub Release'
+        type: boolean
+        required: true
+        default: true
+  schedule:
+    - cron: '23 3 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: audiobookshelf-armv8-${{ github.event.inputs.version || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      already_released: ${{ steps.release.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        env:
+          REQUESTED: ${{ github.event.inputs.version || 'latest' }}
+        run: echo "version=$(scripts/resolve-version.sh "$REQUESTED")" >> "$GITHUB_OUTPUT"
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "abs-v${VERSION}-arm64" >/dev/null 2>&1; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.already_released != 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build ARM64 standalone executable
+        run: scripts/build-arm64.sh '${{ needs.resolve.outputs.version }}'
+
+      - name: Build Debian arm64 package
+        run: scripts/build-deb.sh '${{ needs.resolve.outputs.version }}'
+
+      - name: Create archive and checksums
+        run: scripts/package-release.sh '${{ needs.resolve.outputs.version }}'
+
+      - name: Verify package architecture and contents
+        run: |
+          file dist/audiobookshelf-*-linux-arm64
+          dpkg-deb -f dist/audiobookshelf_*_arm64.deb Architecture Version Package
+          test "$(dpkg-deb -f dist/audiobookshelf_*_arm64.deb Architecture)" = arm64
+          dpkg-deb -c dist/audiobookshelf_*_arm64.deb | grep '/usr/bin/audiobookshelf'
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiobookshelf-${{ needs.resolve.outputs.version }}-arm64
+          path: |
+            dist/audiobookshelf-${{ needs.resolve.outputs.version }}-linux-arm64
+            dist/audiobookshelf-${{ needs.resolve.outputs.version }}-linux-arm64.tar.gz
+            dist/audiobookshelf_${{ needs.resolve.outputs.version }}_arm64.deb
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'schedule' || github.event.inputs.publish_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          TAG="abs-v${VERSION}-arm64"
+          TITLE="Audiobookshelf v${VERSION} ARM64"
+          NOTES=$(cat <<TXT
+          Unofficial ARMv8/ARM64 build of Audiobookshelf v${VERSION}.
+
+          Files:
+          - Standalone Linux ARM64 executable
+          - Debian arm64 package with a systemd service
+          - SHA-256 checksums
+
+          This project is not affiliated with the Audiobookshelf maintainers.
+          TXT
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TITLE" --notes "$NOTES"
+          fi

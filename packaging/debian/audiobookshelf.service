@@ -1,0 +1,23 @@
+[Unit]
+Description=Audiobookshelf server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=audiobookshelf
+Group=audiobookshelf
+Environment=ABS_PORT=13378
+Environment=ABS_CONFIG_PATH=/var/lib/audiobookshelf/config
+Environment=ABS_METADATA_PATH=/var/lib/audiobookshelf/metadata
+ExecStart=/usr/bin/audiobookshelf
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/audiobookshelf
+
+[Install]
+WantedBy=multi-user.target
