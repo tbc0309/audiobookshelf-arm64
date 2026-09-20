@@ -1,4 +1,6 @@
-# Audiobookshelf ARMv8 / ARM64 自动编译
+# Audiobookshelf ARMv8 / ARM64 自动构建
+
+[![编译并发布 Audiobookshelf ARM64](https://github.com/tbc0309/audiobookshelf-arm64/actions/workflows/build-armv8.yml/badge.svg)](https://github.com/tbc0309/audiobookshelf-arm64/actions/workflows/build-armv8.yml)
 
 在 GitHub Actions 的 x86_64 Runner 上，通过 QEMU 运行完整 ARM64 Node.js 环境，自动生成：
 
@@ -8,15 +10,11 @@
 
 > 非 Audiobookshelf 官方项目。源码来自 `advplyr/audiobookshelf`，请遵守其 GPL-3.0 许可证。
 
-## 一键使用
+## 自动构建
 
-1. 在 GitHub 新建一个空仓库。
-2. 将本项目全部文件上传到仓库。
-3. 打开 **Actions → Build Audiobookshelf ARMv8 → Run workflow**。
-4. `version` 填 `latest` 或明确版本，例如 `2.36.0`。
-5. 构建完成后，在 Actions Artifacts 或 Releases 下载文件。
+工作流每天检查一次上游最新正式 Release。发现尚未发布的新版本时，会自动编译并创建本仓库 Release；相同版本已有 `abs-v<版本>-arm64` Release 时不会重复构建。
 
-工作流每天检查一次上游最新 Release；发现尚未发布的版本时，会自动编译并创建本仓库 Release。相同版本已有 `abs-v<版本>-arm64` Release 时，定时任务不会重复构建。
+也可打开 **Actions → 编译并发布 Audiobookshelf ARM64 → Run workflow**，将 `version` 设为 `latest` 或明确版本号，并选择是否发布 Release。
 
 ## DEB 安装
 
@@ -84,3 +82,7 @@ sudo docker run --privileged --rm tonistiigi/binfmt --install arm64
 ## 构建原理
 
 Audiobookshelf 的打包配置包含 `sqlite3` 原生 `.node` binding。因此不能只在 x86_64 主机执行交叉目标打包；`npm ci` 也必须在 ARM64 用户态完成。本项目通过 QEMU 启动 `linux/arm64` 容器，使前端构建、服务端依赖安装和 `pkg` 打包全部发生在 ARM64 环境中。
+
+## 许可证
+
+本仓库的构建脚本采用 [MIT License](LICENSE) 发布。生成物包含的 Audiobookshelf 程序仍遵循上游的 [GPL-3.0 License](https://github.com/advplyr/audiobookshelf/blob/master/LICENSE)，其他依赖保留各自许可证。本项目与 Audiobookshelf 官方无隶属关系。

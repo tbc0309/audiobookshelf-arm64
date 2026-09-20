@@ -1,4 +1,4 @@
-name: Build Audiobookshelf ARMv8
+name: 编译并发布 Audiobookshelf ARM64
 
 "on":
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       already_released: ${{ steps.release.outputs.exists }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: version
         env:
           REQUESTED: ${{ github.event.inputs.version || 'latest' }}
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Enable ARM64 emulation
         uses: docker/setup-qemu-action@v3
