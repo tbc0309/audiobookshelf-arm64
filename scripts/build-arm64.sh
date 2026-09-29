@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/build"
 DIST="$ROOT/dist"
 SRC="$BUILD/audiobookshelf"
-IMAGE="${BUILD_IMAGE:-node:20-bullseye}"
+IMAGE="${BUILD_IMAGE:-node:20-bookworm}"
 PKG_VERSION="${PKG_VERSION:-5.12.0}"
 
 rm -rf "$BUILD" "$DIST"
