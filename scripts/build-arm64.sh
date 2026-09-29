@@ -30,7 +30,7 @@ docker run --rm --platform linux/arm64 \
   -w /src \
   "$IMAGE" bash -Eeuo pipefail -c '
     apt-get update
-    apt-get install -y --no-install-recommends python3 make g++ git file binutils ca-certificates
+    apt-get install -y --no-install-recommends --no-upgrade python3 make g++ git file binutils ca-certificates
     rm -rf /var/lib/apt/lists/*
 
     cd /src/client
