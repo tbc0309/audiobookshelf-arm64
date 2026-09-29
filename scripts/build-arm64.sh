@@ -7,8 +7,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/build"
 DIST="$ROOT/dist"
 SRC="$BUILD/audiobookshelf"
-IMAGE="${BUILD_IMAGE:-node:20-bookworm}"
-PKG_VERSION="${PKG_VERSION:-5.12.0}"
+IMAGE="${BUILD_IMAGE:-node:24-bookworm}"
+PKG_VERSION="${PKG_VERSION:-6.22.0}"
 
 rm -rf "$BUILD" "$DIST"
 mkdir -p "$BUILD" "$DIST"
@@ -17,8 +17,33 @@ echo "Cloning Audiobookshelf v$VERSION"
 git clone --depth 1 --branch "v$VERSION" \
   https://github.com/advplyr/audiobookshelf.git "$SRC"
 
-# Run all npm operations inside an emulated ARM64 container. This ensures
-# sqlite3 and every other native dependency are ARM64, not x86_64.
+# Stage 1: build the web client and compile the TypeScript server on the
+# native (x86_64) runner. Since v2.37.0 the server sources are TypeScript and
+# must be compiled to dist-server/ with tsc; upstream deliberately compiles on
+# the builder CPU because tsc can SIGILL under QEMU emulation.
+docker run --rm \
+  -e HOME=/tmp/home \
+  -e npm_config_audit=false \
+  -e npm_config_fund=false \
+  -e npm_config_update_notifier=false \
+  -v "$SRC:/src" \
+  -w /src \
+  "$IMAGE" bash -Eeuo pipefail -c '
+    cd /src/client
+    npm ci --unsafe-perm=true
+    npm run generate
+    rm -rf node_modules
+
+    cd /src
+    npm ci --include=dev --ignore-scripts --unsafe-perm=true
+    npm run build:server
+    test -f dist-server/index.js
+    rm -rf node_modules
+  '
+
+# Stage 2: install production dependencies and run pkg inside an emulated
+# ARM64 container. This ensures sqlite3 and every other native dependency are
+# ARM64, not x86_64.
 docker run --rm --platform linux/arm64 \
   -e HOME=/tmp/home \
   -e npm_config_audit=false \
@@ -33,17 +58,12 @@ docker run --rm --platform linux/arm64 \
     apt-get install -y --no-install-recommends python3 make g++ git file binutils ca-certificates
     rm -rf /var/lib/apt/lists/*
 
-    cd /src/client
-    npm ci --unsafe-perm=true
-    npm run generate
-    rm -rf node_modules
-
     cd /src
     npm ci --omit=dev --unsafe-perm=true
     npm install --no-save "@yao-pkg/pkg@${PKG_VERSION}"
 
     ./node_modules/.bin/pkg \
-      --targets node20-linux-arm64 \
+      --targets node24-linux-arm64 \
       --output /out/audiobookshelf \
       --compress GZip \
       .
